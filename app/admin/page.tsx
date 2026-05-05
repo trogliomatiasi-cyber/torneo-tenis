@@ -348,4 +348,64 @@ function ResultsTab({ data, refresh }: { data: TournamentData; refresh: () => vo
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false)
   const [tab, setTab] = useState<'setup' | 'results'>('results')
-  c
+  const [data, setData] = useState<TournamentData>({ players: [], matches: [] })
+
+  useEffect(() => {
+    if (sessionStorage.getItem('admin') === '1') setAuthed(true)
+  }, [])
+
+  const fetchData = useCallback(async () => {
+    const [{ data: players }, { data: matches }] = await Promise.all([
+      supabase.from('players').select('*').order('name'),
+      supabase.from('matches').select('*, player1:player1_id(*), player2:player2_id(*), winner:winner_id(*)').order('created_at'),
+    ])
+    setData({ players: players ?? [], matches: matches ?? [] })
+  }, [])
+
+  useEffect(() => {
+    if (authed) fetchData()
+  }, [authed, fetchData])
+
+  if (!authed) return <LoginScreen onLogin={() => { setAuthed(true) }} />
+
+  const hasTournament = data.players.length > 0
+
+  return (
+    <div className="min-h-screen bg-[#F0F7F4]">
+      <header className="bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white shadow-lg">
+        <div className="max-w-4xl mx-auto px-4 py-5 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-extrabold">🎾 Panel Admin</h1>
+            <p className="text-emerald-300 text-sm">Administrador del torneo</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <a href="/" className="text-xs text-emerald-300 hover:text-white border border-emerald-600 px-3 py-1.5 rounded-lg transition">Ver página pública →</a>
+            <button onClick={() => { sessionStorage.removeItem('admin'); setAuthed(false) }} className="text-xs text-emerald-400 hover:text-white transition">Salir</button>
+          </div>
+        </div>
+        <div className="max-w-4xl mx-auto px-4 pb-0 flex gap-1">
+          {(['results', 'setup'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition ${tab === t ? 'bg-[#F0F7F4] text-[#1B4332]' : 'text-emerald-300 hover:text-white'}`}>
+              {t === 'results' ? '📋 Resultados' : '⚙️ Configurar Torneo'}
+            </button>
+          ))}
+        </div>
+      </header>
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        {tab === 'setup' && <SetupTab onDone={() => { fetchData(); setTab('results') }} />}
+        {tab === 'results' && (
+          hasTournament
+            ? <ResultsTab data={data} refresh={fetchData} />
+            : (
+              <div className="text-center py-16">
+                <div className="text-5xl mb-4">⚙️</div>
+                <h2 className="text-xl font-bold text-gray-700 mb-2">Todavía no hay torneo</h2>
+                <p className="text-gray-500 mb-6">Primero tenés que configurar el torneo cargando los jugadores.</p>
+                <button onClick={() => setTab('setup')} className="bg-[#1B4332] text-white px-6 py-3 rounded-xl font-bold hover:bg-[#2D6A4F] transition">Ir a Configurar Torneo →</button>
+              </div>
+            )
+        )}
+      </main>
+    </div>
+  )
+}
