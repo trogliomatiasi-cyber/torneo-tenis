@@ -8,7 +8,6 @@ const GROUPS = ['A', 'B', 'C', 'D']
 
 type TournamentData = { players: Player[]; matches: Match[] }
 
-// ───── Login ─────
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [pw, setPw] = useState('')
   const [error, setError] = useState('')
@@ -58,7 +57,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   )
 }
 
-// ───── Setup de jugadores ─────
 function SetupTab({ onDone }: { onDone: () => void }) {
   const [names, setNames] = useState<string[]>(Array(12).fill(''))
   const [loading, setLoading] = useState(false)
@@ -128,7 +126,6 @@ function SetupTab({ onDone }: { onDone: () => void }) {
   )
 }
 
-// ───── Formulario de resultado ─────
 function MatchResultForm({ match, players, onSaved, onCancel }: {
   match: Match
   players: Player[]
@@ -167,7 +164,6 @@ function MatchResultForm({ match, players, onSaved, onCancel }: {
       headers: { 'Content-Type': 'application/json' },
     })
     if (res.ok) {
-      // Si es QF o SF, avanzar al ganador automáticamente
       if (match.stage === 'qf' || match.stage === 'sf') {
         await fetch('/api/setup', {
           method: 'POST',
@@ -212,7 +208,6 @@ function MatchResultForm({ match, players, onSaved, onCancel }: {
       </div>
 
       <div className="space-y-4">
-        {/* Set 1 */}
         <div>
           <p className="text-xs font-semibold text-gray-500 mb-2 uppercase">Set 1</p>
           <div className="flex items-center gap-3">
@@ -224,7 +219,6 @@ function MatchResultForm({ match, players, onSaved, onCancel }: {
           </div>
         </div>
 
-        {/* Set 2 */}
         <div>
           <p className="text-xs font-semibold text-gray-500 mb-2 uppercase">Set 2</p>
           <div className="flex items-center gap-3">
@@ -236,7 +230,6 @@ function MatchResultForm({ match, players, onSaved, onCancel }: {
           </div>
         </div>
 
-        {/* Super TB */}
         {needsSuperTB && (
           <div className="bg-amber-50 rounded-xl p-3">
             <p className="text-xs font-semibold text-amber-600 mb-2 uppercase">Super Tie-Break (a 10)</p>
@@ -275,15 +268,12 @@ function MatchResultForm({ match, players, onSaved, onCancel }: {
   )
 }
 
-// ───── Tab de resultados ─────
 function ResultsTab({ data, refresh }: { data: TournamentData; refresh: () => void }) {
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [showKnockoutBtn, setShowKnockoutBtn] = useState(false)
   const [knockoutLoading, setKnockoutLoading] = useState(false)
   const [knockoutMsg, setKnockoutMsg] = useState('')
   const { players, matches } = data
 
-  // Verificar si todos los partidos de grupos están jugados
   const groupMatches = matches.filter(m => m.stage === 'group')
   const allGroupsDone = groupMatches.length > 0 && groupMatches.every(m => m.played)
   const hasKnockouts = matches.some(m => m.stage === 'qf')
@@ -415,7 +405,6 @@ function ResultsTab({ data, refresh }: { data: TournamentData; refresh: () => vo
   )
 }
 
-// ───── Panel principal ─────
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false)
   const [tab, setTab] = useState<'setup' | 'results'>('results')
@@ -426,7 +415,7 @@ export default function AdminPage() {
   }, [])
 
   const fetchData = useCallback(async () => {
-    const res = await fetch('/api/tournament')
+    const res = await fetch('/api/tournament?t=' + Date.now(), { cache: 'no-store' })
     setData(await res.json())
   }, [])
 
