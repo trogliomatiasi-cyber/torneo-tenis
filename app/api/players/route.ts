@@ -4,11 +4,16 @@ import { supabase } from '@/lib/supabase'
 export async function POST(req: NextRequest) {
   const { names } = await req.json() as { names: string[] }
 
-  // Borrar todo lo anterior y arrancar de cero
-  await supabase.from('matches').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-  await supabase.from('players').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  const { data: existingMatches } = await supabase.from('matches').select('id')
+  if (existingMatches && existingMatches.length > 0) {
+    await supabase.from('matches').delete().in('id', existingMatches.map((m: {id: string}) => m.id))
+  }
 
-  // Mezclar aleatoriamente
+  const { data: existingPlayers } = await supabase.from('players').select('id')
+  if (existingPlayers && existingPlayers.length > 0) {
+    await supabase.from('players').delete().in('id', existingPlayers.map((p: {id: string}) => p.id))
+  }
+
   const shuffled = [...names].sort(() => Math.random() - 0.5)
   const groups = ['A', 'B', 'C', 'D']
   const playersToInsert = shuffled.map((name, i) => ({
@@ -23,7 +28,6 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Generar partidos de grupos (todos contra todos dentro de cada grupo)
   const matchesToInsert: {
     stage: string
     group_name: string
@@ -33,7 +37,7 @@ export async function POST(req: NextRequest) {
   }[] = []
 
   for (const group of groups) {
-    const groupPlayers = players!.filter(p => p.group_name === group)
+    const groupPlayers = players!.filter((p: {group_name: string}) => p.group_name === group)
     for (let i = 0; i < groupPlayers.length; i++) {
       for (let j = i + 1; j < groupPlayers.length; j++) {
         matchesToInsert.push({
