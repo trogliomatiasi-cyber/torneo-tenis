@@ -1,13 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Player, Match, GroupStanding } from '@/lib/supabase'
+import { supabase, Player, Match, GroupStanding } from '@/lib/supabase'
 import { calcularPosiciones } from '@/lib/tournament'
-
-type TournamentData = {
-  players: Player[]
-  matches: Match[]
-}
 
 const GROUPS = ['A', 'B', 'C', 'D']
 const GROUP_COLORS: Record<string, string> = {
@@ -17,36 +12,12 @@ const GROUP_COLORS: Record<string, string> = {
   D: 'from-green-600 to-green-700',
 }
 
-function ScoreBadge({ m, pid }: { m: Match; pid: string | null }) {
-  if (!m.played || !pid) return <span className="text-gray-400">–</span>
-
-  const isP1 = pid === m.player1_id
-  const s1 = isP1 ? m.set1_p1 : m.set1_p2
-  const s2 = isP1 ? m.set2_p1 : m.set2_p2
-  const tb = isP1 ? m.supertb_p1 : m.supertb_p2
-  const won = m.winner_id === pid
-
-  return (
-    <span className={`text-sm font-mono font-bold ${won ? 'text-emerald-600' : 'text-red-400'}`}>
-      {s1}-{isP1 ? m.set1_p2 : m.set1_p1}
-      {s2 != null && <>, {s2}-{isP1 ? m.set2_p2 : m.set2_p1}</>}
-      {tb != null && <> ({tb})</>}
-    </span>
-  )
-}
-
-function GroupTable({ group, standings, matches }: {
-  group: string
-  standings: GroupStanding[]
-  matches: Match[]
-}) {
+function GroupTable({ group, standings, matches }: { group: string; standings: GroupStanding[]; matches: Match[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-      <div className={`bg-gradient-to-r ${GROUP_COLORS[group]} px-5 py-3 flex items-center gap-2`}>
+      <div className={`bg-gradient-to-r ${GROUP_COLORS[group]} px-5 py-3`}>
         <span className="text-white font-bold text-xl">Grupo {group}</span>
       </div>
-
-      {/* Tabla de posiciones */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -62,15 +33,9 @@ function GroupTable({ group, standings, matches }: {
           </thead>
           <tbody>
             {standings.map((s, i) => (
-              <tr
-                key={s.player.id}
-                className={`border-t ${i < 2 ? 'bg-emerald-50' : ''}`}
-              >
+              <tr key={s.player.id} className={`border-t ${i < 2 ? 'bg-emerald-50' : ''}`}>
                 <td className="px-4 py-3 text-center">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto
-                    ${i < 2 ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                    {i + 1}
-                  </span>
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${i < 2 ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-500'}`}>{i + 1}</span>
                 </td>
                 <td className="px-4 py-3 font-medium">
                   {s.player.name}
@@ -86,8 +51,6 @@ function GroupTable({ group, standings, matches }: {
           </tbody>
         </table>
       </div>
-
-      {/* Partidos del grupo */}
       <div className="border-t px-4 py-3 space-y-2">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Partidos</p>
         {matches.map(m => (
@@ -115,22 +78,14 @@ function GroupTable({ group, standings, matches }: {
   )
 }
 
-function BracketMatch({ label, match, roundLabel }: {
-  label: string
-  match: Match | null
-  roundLabel?: string
-}) {
+function BracketMatch({ label, match, roundLabel }: { label: string; match: Match | null; roundLabel?: string }) {
   const p1 = match?.player1 as Player | undefined
   const p2 = match?.player2 as Player | undefined
-
   return (
     <div className="flex flex-col w-52">
-      {roundLabel && (
-        <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2 text-center">{roundLabel}</p>
-      )}
+      {roundLabel && <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2 text-center">{roundLabel}</p>}
       <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-100">
-        <div className={`flex items-center justify-between px-4 py-2.5 border-b
-          ${match?.winner_id && match.winner_id === match.player1_id ? 'bg-emerald-50' : ''}`}>
+        <div className={`flex items-center justify-between px-4 py-2.5 border-b ${match?.winner_id && match.winner_id === match.player1_id ? 'bg-emerald-50' : ''}`}>
           <span className={`font-medium text-sm truncate max-w-[110px] ${match?.winner_id === match?.player1_id ? 'text-emerald-700 font-bold' : 'text-gray-700'}`}>
             {p1?.name ?? <span className="text-gray-300 italic">Por definir</span>}
           </span>
@@ -141,8 +96,7 @@ function BracketMatch({ label, match, roundLabel }: {
             </span>
           )}
         </div>
-        <div className={`flex items-center justify-between px-4 py-2.5
-          ${match?.winner_id && match.winner_id === match.player2_id ? 'bg-emerald-50' : ''}`}>
+        <div className={`flex items-center justify-between px-4 py-2.5 ${match?.winner_id && match.winner_id === match.player2_id ? 'bg-emerald-50' : ''}`}>
           <span className={`font-medium text-sm truncate max-w-[110px] ${match?.winner_id === match?.player2_id ? 'text-emerald-700 font-bold' : 'text-gray-700'}`}>
             {p2?.name ?? <span className="text-gray-300 italic">Por definir</span>}
           </span>
@@ -160,19 +114,23 @@ function BracketMatch({ label, match, roundLabel }: {
 }
 
 export default function HomePage() {
-  const [data, setData] = useState<TournamentData | null>(null)
+  const [players, setPlayers] = useState<Player[]>([])
+  const [matches, setMatches] = useState<Match[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
-    const res = await fetch('/api/tournament')
-    const json = await res.json()
-    setData(json)
+    const [{ data: p }, { data: m }] = await Promise.all([
+      supabase.from('players').select('*').order('name'),
+      supabase.from('matches').select('*, player1:player1_id(*), player2:player2_id(*), winner:winner_id(*)').order('created_at'),
+    ])
+    setPlayers(p ?? [])
+    setMatches(m ?? [])
     setLoading(false)
   }, [])
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000) // actualiza cada 30s
+    const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [fetchData])
 
@@ -185,8 +143,6 @@ export default function HomePage() {
     </div>
   )
 
-  const { players = [], matches = [] } = data ?? {}
-
   const groupStandings: Record<string, GroupStanding[]> = {}
   for (const g of GROUPS) {
     const gPlayers = players.filter(p => p.group_name === g)
@@ -197,32 +153,22 @@ export default function HomePage() {
   const qfMatches = matches.filter(m => m.stage === 'qf').sort((a, b) => (a.match_position ?? 0) - (b.match_position ?? 0))
   const sfMatches = matches.filter(m => m.stage === 'sf').sort((a, b) => (a.match_position ?? 0) - (b.match_position ?? 0))
   const finalMatch = matches.find(m => m.stage === 'final')
-
   const hasKnockouts = qfMatches.length > 0
-  const hasTournamentStarted = players.length > 0
 
   return (
     <div className="min-h-screen bg-[#F0F7F4]">
-      {/* Header */}
       <header className="bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white shadow-lg">
         <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2">
-              🎾 Torneo de Tenis
-            </h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">🎾 Torneo de Tenis</h1>
             <p className="text-emerald-300 text-sm mt-1">12 jugadores · Grupos + Eliminación directa</p>
           </div>
-          <a
-            href="/admin"
-            className="text-xs text-emerald-400 hover:text-emerald-200 transition-colors border border-emerald-700 px-3 py-1.5 rounded-lg"
-          >
-            Admin
-          </a>
+          <a href="/admin" className="text-xs text-emerald-400 hover:text-emerald-200 transition border border-emerald-700 px-3 py-1.5 rounded-lg">Admin</a>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-12">
-        {!hasTournamentStarted ? (
+        {players.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-6xl mb-4">🎾</div>
             <h2 className="text-2xl font-bold text-gray-700 mb-2">Torneo aún no iniciado</h2>
@@ -230,81 +176,43 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            {/* Fase de grupos */}
             <section>
               <h2 className="text-2xl font-bold text-[#1B4332] mb-6 flex items-center gap-2">
-                <span className="w-1 h-7 bg-emerald-500 rounded-full inline-block" />
-                Fase de Grupos
+                <span className="w-1 h-7 bg-emerald-500 rounded-full inline-block" />Fase de Grupos
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {GROUPS.map(g => (
-                  <GroupTable
-                    key={g}
-                    group={g}
-                    standings={groupStandings[g] ?? []}
-                    matches={matches.filter(m => m.group_name === g && m.stage === 'group')}
-                  />
+                  <GroupTable key={g} group={g} standings={groupStandings[g] ?? []} matches={matches.filter(m => m.group_name === g && m.stage === 'group')} />
                 ))}
               </div>
             </section>
 
-            {/* Eliminación directa */}
             {hasKnockouts && (
               <section>
                 <h2 className="text-2xl font-bold text-[#1B4332] mb-6 flex items-center gap-2">
-                  <span className="w-1 h-7 bg-emerald-500 rounded-full inline-block" />
-                  Eliminación Directa
+                  <span className="w-1 h-7 bg-emerald-500 rounded-full inline-block" />Eliminación Directa
                 </h2>
-
                 <div className="overflow-x-auto pb-4">
                   <div className="flex gap-8 items-center min-w-max">
-                    {/* Cuartos */}
                     <div className="flex flex-col gap-4">
-                      {qfMatches.map((m, i) => (
-                        <BracketMatch
-                          key={m.id}
-                          label={`QF${i + 1}`}
-                          match={m}
-                          roundLabel={i === 0 ? 'Cuartos de Final' : undefined}
-                        />
-                      ))}
+                      {qfMatches.map((m, i) => <BracketMatch key={m.id} label={`QF${i + 1}`} match={m} roundLabel={i === 0 ? 'Cuartos de Final' : undefined} />)}
                     </div>
-
                     <div className="flex flex-col gap-16 items-center">
                       <div className="text-2xl text-gray-300">→</div>
                       <div className="text-2xl text-gray-300">→</div>
                     </div>
-
-                    {/* Semis */}
-                    <div className="flex flex-col gap-20 justify-around h-full">
-                      {sfMatches.map((m, i) => (
-                        <BracketMatch
-                          key={m.id}
-                          label={`SF${i + 1}`}
-                          match={m}
-                          roundLabel={i === 0 ? 'Semifinales' : undefined}
-                        />
-                      ))}
+                    <div className="flex flex-col gap-20">
+                      {sfMatches.map((m, i) => <BracketMatch key={m.id} label={`SF${i + 1}`} match={m} roundLabel={i === 0 ? 'Semifinales' : undefined} />)}
                     </div>
-
                     <div className="flex flex-col items-center self-center">
                       <div className="text-2xl text-gray-300">→</div>
                     </div>
-
-                    {/* Final */}
                     <div className="self-center">
-                      <BracketMatch
-                        label="FINAL"
-                        match={finalMatch ?? null}
-                        roundLabel="Final"
-                      />
-
+                      <BracketMatch label="FINAL" match={finalMatch ?? null} roundLabel="Final" />
                       {finalMatch?.winner_id && (
                         <div className="mt-6 text-center">
                           <div className="text-3xl mb-1">🏆</div>
-                          <p className="font-extrabold text-xl text-[#1B4332]">
-                            {(finalMatch.winner as Player)?.name}
-                          </p>
+                          <p className="font-extrabold text-xl text-[#1B4332]">{(finalMatch.winner as Player)?.name}</p>
                           <p className="text-sm text-gray-500">Campeón del Torneo</p>
                         </div>
                       )}
@@ -316,10 +224,7 @@ export default function HomePage() {
           </>
         )}
       </main>
-
-      <footer className="text-center py-6 text-xs text-gray-400 mt-8">
-        Se actualiza automáticamente cada 30 segundos
-      </footer>
+      <footer className="text-center py-6 text-xs text-gray-400 mt-8">Se actualiza automáticamente cada 30 segundos</footer>
     </div>
   )
 }
