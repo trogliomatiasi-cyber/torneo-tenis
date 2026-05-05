@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const [{ data: players }, { data: matches }] = await Promise.all([
     supabase.from('players').select('*').order('name'),
