@@ -8,13 +8,33 @@ export const supabase = createClient(supabaseUrl, supabaseKey)
 export type Player = {
   id: string
   name: string
-  group_name: string | null
   created_at: string
+}
+
+export type Tournament = {
+  id: string
+  name: string
+  category: '250' | '500' | '1000' | '2000'
+  status: 'upcoming' | 'active' | 'completed'
+  start_date: string | null
+  num_groups: number
+  players_per_group: number
+  players_advancing: number
+  created_at: string
+}
+
+export type TournamentPlayer = {
+  id: string
+  tournament_id: string
+  player_id: string
+  group_name: string | null
+  player?: Player
 }
 
 export type Match = {
   id: string
-  stage: 'group' | 'qf' | 'sf' | 'final'
+  tournament_id: string
+  stage: string
   group_name: string | null
   match_position: number | null
   player1_id: string | null
@@ -42,4 +62,11 @@ export type GroupStanding = {
   gamesWon: number
   gamesLost: number
   points: number
+}
+
+export type RankingEntry = {
+  player: Player
+  totalPoints: number
+  tournaments: number
+  bestResult: string
 }
