@@ -1,230 +1,175 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { supabase, Player, Match, GroupStanding } from '@/lib/supabase'
-import { calcularPosiciones } from '@/lib/tournament'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { supabase, Tournament, Player, Match, RankingEntry } from '@/lib/supabase'
+import { calcularRanking, CATEGORY_BADGE, CATEGORY_COLORS, ROUND_LABELS } from '@/lib/ranking'
 
-const GROUPS = ['A', 'B', 'C', 'D']
-const GROUP_COLORS: Record<string, string> = {
-  A: 'from-emerald-600 to-emerald-700',
-  B: 'from-teal-600 to-teal-700',
-  C: 'from-cyan-600 to-cyan-700',
-  D: 'from-green-600 to-green-700',
+type TournamentWithMatches = Tournament & { matches: Match[] }
+
+const STATUS_LABEL: Record<string, string> = {
+  upcoming: 'Próximamente',
+  active: 'En curso',
+  completed: 'Finalizado',
+}
+const STATUS_COLOR: Record<string, string> = {
+  upcoming: 'bg-gray-100 text-gray-600',
+  active: 'bg-green-100 text-green-700',
+  completed: 'bg-blue-100 text-blue-700',
 }
 
-function GroupTable({ group, standings, matches }: { group: string; standings: GroupStanding[]; matches: Match[] }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-      <div className={`bg-gradient-to-r ${GROUP_COLORS[group]} px-5 py-3`}>
-        <span className="text-white font-bold text-xl">Grupo {group}</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-              <th className="px-4 py-2 text-left">#</th>
-              <th className="px-4 py-2 text-left">Jugador</th>
-              <th className="px-4 py-2 text-center">PJ</th>
-              <th className="px-4 py-2 text-center">G</th>
-              <th className="px-4 py-2 text-center">P</th>
-              <th className="px-4 py-2 text-center">Sets</th>
-              <th className="px-4 py-2 text-center">Pts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {standings.map((s, i) => (
-              <tr key={s.player.id} className={`border-t ${i < 2 ? 'bg-emerald-50' : ''}`}>
-                <td className="px-4 py-3 text-center">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${i < 2 ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-500'}`}>{i + 1}</span>
-                </td>
-                <td className="px-4 py-3 font-medium">
-                  {s.player.name}
-                  {i < 2 && <span className="ml-2 text-xs text-emerald-600 font-normal">clasifica</span>}
-                </td>
-                <td className="px-4 py-3 text-center text-gray-600">{s.played}</td>
-                <td className="px-4 py-3 text-center font-semibold text-emerald-700">{s.wins}</td>
-                <td className="px-4 py-3 text-center text-red-400">{s.losses}</td>
-                <td className="px-4 py-3 text-center text-gray-600">{s.setsWon}/{s.setsLost}</td>
-                <td className="px-4 py-3 text-center font-bold text-gray-800">{s.points}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="border-t px-4 py-3 space-y-2">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Partidos</p>
-        {matches.map(m => (
-          <div key={m.id} className="flex items-center justify-between text-sm gap-2 py-1">
-            <span className={`font-medium flex-1 text-right truncate ${m.winner_id === m.player1_id ? 'text-emerald-700 font-bold' : 'text-gray-600'}`}>
-              {(m.player1 as Player)?.name ?? '–'}
-            </span>
-            <div className="flex-shrink-0 text-center w-24">
-              {m.played ? (
-                <span className="text-xs font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
-                  {m.set1_p1}-{m.set1_p2} {m.set2_p1}-{m.set2_p2}
-                  {m.supertb_p1 != null && ` (${m.supertb_p1}-${m.supertb_p2})`}
-                </span>
-              ) : (
-                <span className="text-xs text-gray-400">pendiente</span>
-              )}
-            </div>
-            <span className={`font-medium flex-1 truncate ${m.winner_id === m.player2_id ? 'text-emerald-700 font-bold' : 'text-gray-600'}`}>
-              {(m.player2 as Player)?.name ?? '–'}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function BracketMatch({ label, match, roundLabel }: { label: string; match: Match | null; roundLabel?: string }) {
-  const p1 = match?.player1 as Player | undefined
-  const p2 = match?.player2 as Player | undefined
-  return (
-    <div className="flex flex-col w-52">
-      {roundLabel && <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2 text-center">{roundLabel}</p>}
-      <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-100">
-        <div className={`flex items-center justify-between px-4 py-2.5 border-b ${match?.winner_id && match.winner_id === match.player1_id ? 'bg-emerald-50' : ''}`}>
-          <span className={`font-medium text-sm truncate max-w-[110px] ${match?.winner_id === match?.player1_id ? 'text-emerald-700 font-bold' : 'text-gray-700'}`}>
-            {p1?.name ?? <span className="text-gray-300 italic">Por definir</span>}
-          </span>
-          {match?.played && (
-            <span className="text-xs font-mono text-gray-500 ml-1 flex-shrink-0">
-              {match.set1_p1}-{match.set1_p2}{match.set2_p1 != null ? ` ${match.set2_p1}-${match.set2_p2}` : ''}
-              {match.supertb_p1 != null ? ` (${match.supertb_p1})` : ''}
-            </span>
-          )}
-        </div>
-        <div className={`flex items-center justify-between px-4 py-2.5 ${match?.winner_id && match.winner_id === match.player2_id ? 'bg-emerald-50' : ''}`}>
-          <span className={`font-medium text-sm truncate max-w-[110px] ${match?.winner_id === match?.player2_id ? 'text-emerald-700 font-bold' : 'text-gray-700'}`}>
-            {p2?.name ?? <span className="text-gray-300 italic">Por definir</span>}
-          </span>
-          {match?.played && (
-            <span className="text-xs font-mono text-gray-500 ml-1 flex-shrink-0">
-              {match.set1_p2}-{match.set1_p1}{match.set2_p2 != null ? ` ${match.set2_p2}-${match.set2_p1}` : ''}
-              {match.supertb_p2 != null ? ` (${match.supertb_p2})` : ''}
-            </span>
-          )}
-        </div>
-      </div>
-      <p className="text-xs text-center text-gray-400 mt-1">{label}</p>
-    </div>
-  )
-}
-
-export default function HomePage() {
+export default function CircuitHome() {
+  const [tournaments, setTournaments] = useState<TournamentWithMatches[]>([])
   const [players, setPlayers] = useState<Player[]>([])
-  const [matches, setMatches] = useState<Match[]>([])
+  const [ranking, setRanking] = useState<RankingEntry[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetchData = useCallback(async () => {
-    const [{ data: p }, { data: m }] = await Promise.all([
-      supabase.from('players').select('*').order('name'),
-      supabase.from('matches').select('*, player1:player1_id(*), player2:player2_id(*), winner:winner_id(*)').order('created_at'),
-    ])
-    setPlayers(p ?? [])
-    setMatches(m ?? [])
-    setLoading(false)
+  useEffect(() => {
+    async function load() {
+      const [{ data: ts }, { data: ps }, { data: ms }] = await Promise.all([
+        supabase.from('tournaments').select('*').order('start_date', { ascending: false }),
+        supabase.from('players').select('*').order('name'),
+        supabase.from('matches').select('*'),
+      ])
+      const tList = ts ?? []
+      const mList = ms ?? []
+      const pList = ps ?? []
+      const withMatches = tList.map((t: Tournament) => ({
+        ...t,
+        matches: mList.filter((m: Match) => m.tournament_id === t.id),
+      }))
+      setTournaments(withMatches)
+      setPlayers(pList)
+      setRanking(calcularRanking(withMatches, pList))
+      setLoading(false)
+    }
+    load()
+    const interval = setInterval(load, 30000)
+    return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
-  }, [fetchData])
-
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-gray-500">Cargando torneo...</p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-[#F0F7F4]">
+      <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
-  const groupStandings: Record<string, GroupStanding[]> = {}
-  for (const g of GROUPS) {
-    const gPlayers = players.filter(p => p.group_name === g)
-    const gMatches = matches.filter(m => m.group_name === g && m.stage === 'group')
-    groupStandings[g] = calcularPosiciones(gPlayers, gMatches)
-  }
-
-  const qfMatches = matches.filter(m => m.stage === 'qf').sort((a, b) => (a.match_position ?? 0) - (b.match_position ?? 0))
-  const sfMatches = matches.filter(m => m.stage === 'sf').sort((a, b) => (a.match_position ?? 0) - (b.match_position ?? 0))
-  const finalMatch = matches.find(m => m.stage === 'final')
-  const hasKnockouts = qfMatches.length > 0
+  const activeTournament = tournaments.find(t => t.status === 'active')
 
   return (
     <div className="min-h-screen bg-[#F0F7F4]">
       <header className="bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white shadow-lg">
-        <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">🎾 Torneo de Tenis</h1>
-            <p className="text-emerald-300 text-sm mt-1">12 jugadores · Grupos + Eliminación directa</p>
+            <p className="text-emerald-300 text-sm font-semibold tracking-widest uppercase mb-1">Circuito Oficial</p>
+            <h1 className="text-4xl font-extrabold tracking-tight">🎾 ATP Castelar</h1>
+            <p className="text-emerald-300 text-sm mt-2">{tournaments.length} torneos · {players.length} jugadores</p>
           </div>
-          <a href="/admin" className="text-xs text-emerald-400 hover:text-emerald-200 transition border border-emerald-700 px-3 py-1.5 rounded-lg">Admin</a>
+          <a href="/admin" className="text-xs text-emerald-400 hover:text-white border border-emerald-700 px-3 py-1.5 rounded-lg transition">
+            Admin
+          </a>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-12">
-        {players.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">🎾</div>
-            <h2 className="text-2xl font-bold text-gray-700 mb-2">Torneo aún no iniciado</h2>
-            <p className="text-gray-500">El organizador aún no cargó los jugadores. Volvé más tarde.</p>
-          </div>
-        ) : (
-          <>
-            <section>
-              <h2 className="text-2xl font-bold text-[#1B4332] mb-6 flex items-center gap-2">
-                <span className="w-1 h-7 bg-emerald-500 rounded-full inline-block" />Fase de Grupos
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {GROUPS.map(g => (
-                  <GroupTable key={g} group={g} standings={groupStandings[g] ?? []} matches={matches.filter(m => m.group_name === g && m.stage === 'group')} />
-                ))}
-              </div>
-            </section>
-
-            {hasKnockouts && (
-              <section>
-                <h2 className="text-2xl font-bold text-[#1B4332] mb-6 flex items-center gap-2">
-                  <span className="w-1 h-7 bg-emerald-500 rounded-full inline-block" />Eliminación Directa
-                </h2>
-                <div className="overflow-x-auto pb-4">
-                  <div className="flex gap-8 items-center min-w-max">
-                    <div className="flex flex-col gap-4">
-                      {qfMatches.map((m, i) => <BracketMatch key={m.id} label={`QF${i + 1}`} match={m} roundLabel={i === 0 ? 'Cuartos de Final' : undefined} />)}
-                    </div>
-                    <div className="flex flex-col gap-16 items-center">
-                      <div className="text-2xl text-gray-300">→</div>
-                      <div className="text-2xl text-gray-300">→</div>
-                    </div>
-                    <div className="flex flex-col gap-20">
-                      {sfMatches.map((m, i) => <BracketMatch key={m.id} label={`SF${i + 1}`} match={m} roundLabel={i === 0 ? 'Semifinales' : undefined} />)}
-                    </div>
-                    <div className="flex flex-col items-center self-center">
-                      <div className="text-2xl text-gray-300">→</div>
-                    </div>
-                    <div className="self-center">
-                      <BracketMatch label="FINAL" match={finalMatch ?? null} roundLabel="Final" />
-                      {finalMatch?.winner_id && (
-                        <div className="mt-6 text-center">
-                          <div className="text-3xl mb-1">🏆</div>
-                          <p className="font-extrabold text-xl text-[#1B4332]">{(finalMatch.winner as Player)?.name}</p>
-                          <p className="text-sm text-gray-500">Campeón del Torneo</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
-          </>
+      <main className="max-w-6xl mx-auto px-4 py-8 space-y-10">
+        {activeTournament && (
+          <section className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-6 text-white shadow-lg">
+            <p className="text-emerald-200 text-xs font-bold uppercase tracking-widest mb-1">🔴 En curso ahora</p>
+            <h2 className="text-2xl font-extrabold mb-1">{activeTournament.name}</h2>
+            <p className="text-emerald-200 text-sm mb-4">{CATEGORY_BADGE[activeTournament.category]}</p>
+            <Link href={`/torneo/${activeTournament.id}`} className="bg-white text-emerald-700 px-5 py-2 rounded-xl font-bold text-sm hover:bg-emerald-50 transition">
+              Ver torneo →
+            </Link>
+          </section>
         )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-1">
+            <h2 className="text-xl font-bold text-[#1B4332] mb-4 flex items-center gap-2">
+              <span className="w-1 h-6 bg-emerald-500 rounded-full inline-block" />
+              Ranking ATP Castelar
+            </h2>
+            {ranking.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow p-6 text-center text-gray-400 text-sm">
+                Aún no hay puntos registrados
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-400 text-xs uppercase">
+                      <th className="px-4 py-2 text-left">#</th>
+                      <th className="px-4 py-2 text-left">Jugador</th>
+                      <th className="px-4 py-2 text-center">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ranking.map((r, i) => (
+                      <tr key={r.player.id} className={`border-t ${i < 3 ? 'bg-emerald-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto
+                            ${i === 0 ? 'bg-yellow-400 text-white' : i === 1 ? 'bg-gray-400 text-white' : i === 2 ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                            {i + 1}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium">
+                          {r.player.name}
+                          <span className="block text-xs text-gray-400">{ROUND_LABELS[r.bestResult] ?? ''}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold text-emerald-700">{r.totalPoints}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-2">
+            <h2 className="text-xl font-bold text-[#1B4332] mb-4 flex items-center gap-2">
+              <span className="w-1 h-6 bg-emerald-500 rounded-full inline-block" />
+              Torneos
+            </h2>
+            {tournaments.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-400">
+                <div className="text-4xl mb-2">🎾</div>
+                <p>Aún no hay torneos creados</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tournaments.map(t => {
+                  const finalMatch = t.matches.find(m => m.stage === 'final' && m.played && m.winner_id)
+                  const champion = finalMatch?.winner as Player | undefined
+                  return (
+                    <Link key={t.id} href={`/torneo/${t.id}`} className="block bg-white rounded-xl shadow hover:shadow-md transition p-4 border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[t.category]}`}>
+                              {CATEGORY_BADGE[t.category]}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[t.status]}`}>
+                              {STATUS_LABEL[t.status]}
+                            </span>
+                          </div>
+                          <p className="font-bold text-gray-800">{t.name}</p>
+                          {t.start_date && <p className="text-xs text-gray-400 mt-0.5">{new Date(t.start_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>}
+                          {champion && <p className="text-xs text-emerald-600 font-semibold mt-1">🏆 {champion.name}</p>}
+                        </div>
+                        <span className="text-gray-300 text-xl">→</span>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </main>
-      <footer className="text-center py-6 text-xs text-gray-400 mt-8">Se actualiza automáticamente cada 30 segundos</footer>
+
+      <footer className="text-center py-6 text-xs text-gray-400 mt-4">
+        ATP Castelar · Se actualiza cada 30 segundos
+      </footer>
     </div>
   )
 }
