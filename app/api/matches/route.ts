@@ -8,7 +8,10 @@ export async function PATCH(req: NextRequest) {
   let sets1 = 0, sets2 = 0
   if (set1_p1 > set1_p2) sets1++; else if (set1_p2 > set1_p1) sets2++
   if (set2_p1 > set2_p2) sets1++; else if (set2_p2 > set2_p1) sets2++
-  if (sets1 === 1 && sets2 === 1) {
+
+  const needsTB = sets1 === 1 && sets2 === 1
+
+  if (needsTB) {
     if (supertb_p1 > supertb_p2) sets1++; else sets2++
   }
 
@@ -16,7 +19,6 @@ export async function PATCH(req: NextRequest) {
   if (!match) return NextResponse.json({ error: 'Partido no encontrado' }, { status: 404 })
 
   const winner_id = sets1 > sets2 ? match.player1_id : match.player2_id
-  const needsTB = sets1 === 1 && sets2 === 1
 
   await supabase.from('matches').update({
     set1_p1, set1_p2, set2_p1, set2_p2,
